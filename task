@@ -1,0 +1,108 @@
+#!/usr/local/bin/bash5
+#  TOOO components list in usage
+
+function usage {
+  echo "usage: task [options] summary"
+  echo "  summary, a string that describe the task or bug"
+  echo "  type: T, B (task, bug)"
+  echo "  priority: L, M, H, HH, (low, medium, high, highest)"
+  echo "  component: mas, wes"
+  exit 1
+}
+
+source ~/.jira.d/projects.sh
+declare -A priorities=( ["L"]="Lowest" ["M"]="Medium" ["H"]="High" ["HH"]="Highest" )
+declare -A issuetypes=( ["T"]="Task" ["B"]="Bug" )
+
+function getValue {
+  key=$1
+  var=$(declare -p "$2")
+  eval "declare -A _map="${var#*=}
+
+  if [[ -z "$key" || -z "${_map[${key}]}" ]]; then
+    usage
+    exit -1
+  fi
+  echo "${_map[${key}]}"
+}
+
+dryrun="false"
+summary=""
+description=""
+while [[ ! -z "$1" ]]; do
+    case "$1" in
+				dryrun)
+						dryrun="true"
+						;;
+        type:*)
+            arg=`echo $1 | cut -d ':' -f 2`
+						issuetype=`getValue "$arg" "issuetypes"`
+            ;;
+        summary:*)
+            summary=`echo $1 | cut -d ':' -f 2`
+            ;;
+        project:*)
+            componentarg=`echo $1 | cut -d ':' -f 2`
+						component=`getValue "$componentarg" "components"`
+            ;;
+        priority:*)
+            arg=`echo $1 | cut -d ':' -f 2`
+						priority=`getValue "$arg" "priorities"`
+            ;;
+        parent:*)
+            parent_task=`echo $1 | cut -d ':' -f 2`
+            ;;
+        *)
+          if [[ -z "$description" ]]; then
+          	description="$1"
+					else
+          	description="$description $1"
+					fi
+					;;
+    esac
+    shift
+done
+
+if [[ -z "$summary" ]]; then
+  summary="$description"
+fi
+
+component_title=`getValue "$componentarg" "components_titles"`
+
+if [[ -z "$summary" ]]; then
+  echo "ERROR: Summary cannot be empty!"
+  exit -1
+fi
+
+if [[ "$dryrun" == "true" ]]; then
+  if [[ -z "$parent_task" ]]; then
+    if [[ "$summary" == "$description" ]]; then
+      echo $issuetype, $summary, $priority, $component, $component_title
+    else
+      echo $issuetype, "\"$summary\"", "\"$description\"", $priority, $component, $component_title
+    fi
+    exit -1
+  else
+    echo $issuetype, $summary, $priority, $component, $component_title, $parent_task
+    exit -1
+  fi
+fi
+
+if [[ -z "$parent_task" ]]; then
+  jira create --noedit\
+    -i "$issuetype" \
+    --override assignee="$user" \
+    --override summary="$component_title | $summary" \
+    --override description="$description" \
+    --override priority="$priority" \
+    --override components="$component"
+else
+  jira subtask --noedit\
+    -i "$issuetype" \
+    --override assignee="$user" \
+    --override summary="$component_title | $summary" \
+    --override description="$description" \
+    --override priority="$priority" \
+    --override components="$component" \
+    "$parent"
+fi
