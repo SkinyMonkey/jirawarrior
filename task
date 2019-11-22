@@ -1,6 +1,11 @@
 #!/usr/local/bin/bash5
 #  TOOO components list in usage
 
+if [ "$#" -eq 0 ]; then
+  jira mine
+  exit -1
+fi
+
 function usage {
   echo "usage: task [options] summary"
   echo "  summary, a string that describe the task or bug"
@@ -52,6 +57,9 @@ while [[ ! -z "$1" ]]; do
         parent:*)
             parent_task=`echo $1 | cut -d ':' -f 2`
             ;;
+        tags:*)
+            tags=`echo $1 | cut -d ':' -f 2`
+            ;;
         *)
           if [[ -z "$description" ]]; then
           	description="$1"
@@ -88,6 +96,7 @@ if [[ "$dryrun" == "true" ]]; then
   fi
 fi
 
+# TODO : add tags
 if [[ -z "$parent_task" ]]; then
   jira create --noedit\
     -i "$issuetype" \
@@ -96,13 +105,13 @@ if [[ -z "$parent_task" ]]; then
     --override description="$description" \
     --override priority="$priority" \
     --override components="$component"
+# --override labels="$tags"
 else
   jira subtask --noedit\
-    -i "$issuetype" \
     --override assignee="$user" \
     --override summary="$component_title | $summary" \
     --override description="$description" \
     --override priority="$priority" \
     --override components="$component" \
-    "$parent"
+    "$parent_task"
 fi
